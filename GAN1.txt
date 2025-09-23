@@ -1,0 +1,152 @@
+Great — let’s dive into **Example 1** comprehensively, step by step.
+We’ll keep this structured: **Concept → Math → Implementation → Homework**.
+And as you asked, we’ll use **Keras/TensorFlow**, not PyTorch.
+
+---
+
+# 🔹 Example 1 – GAN Fundamentals (Toy 1D Gaussian Data)
+
+### **1. Conceptual Understanding**
+
+* A **GAN** has two networks:
+
+  * **Generator $G$**: takes random noise $z$ (say from a Gaussian/Uniform distribution) and outputs fake samples.
+  * **Discriminator $D$**: takes in real data or fake data and predicts if it’s real (1) or fake (0).
+
+* **Adversarial Game:**
+
+  * Generator tries to fool the Discriminator.
+  * Discriminator tries to correctly classify real vs fake.
+  * Training is like a **minimax game**.
+
+---
+
+### **2. Mathematical Understanding**
+
+The original GAN objective:
+
+$$
+\min_G \max_D V(D, G) = \mathbb{E}_{x \sim p_{data}}[\log D(x)] + \mathbb{E}_{z \sim p_z}[\log (1 - D(G(z)))]
+$$
+
+* $p_{data}$: true data distribution (in our case: Gaussian $N(\mu, \sigma^2)$).
+* $p_z$: distribution of noise input (say Uniform(-1,1)).
+* $D(x)$: probability that $x$ is real.
+* $G(z)$: fake sample from noise.
+
+**Goal:**
+
+* $D$ maximizes correct classification.
+* $G$ minimizes $D$’s ability to detect fakes.
+* At equilibrium: $p_g = p_{data}$.
+
+---
+
+### **3. Python Implementation (Keras/TensorFlow)**
+
+We’ll implement a **very small GAN** to learn a **1D Gaussian distribution**.
+
+```python
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers, models, optimizers
+
+# ==============================
+# 1. Define the Data Distribution
+# ==============================
+# Real data: Gaussian distribution
+def real_data_sampler(batch_size):
+    return np.random.normal(loc=4.0, scale=1.25, size=(batch_size, 1))  # N(4, 1.25)
+
+# Noise input for Generator
+def noise_sampler(batch_size, noise_dim):
+    return np.random.uniform(-1.0, 1.0, size=(batch_size, noise_dim))
+
+# ==============================
+# 2. Build the Generator
+# ==============================
+def build_generator(noise_dim=5):
+    model = models.Sequential([
+        layers.Dense(16, activation="relu", input_dim=noise_dim),
+        layers.Dense(8, activation="relu"),
+        layers.Dense(1)  # output: 1D sample
+    ])
+    return model
+
+# ==============================
+# 3. Build the Discriminator
+# ==============================
+def build_discriminator():
+    model = models.Sequential([
+        layers.Dense(16, activation="relu", input_dim=1),
+        layers.Dense(8, activation="relu"),
+        layers.Dense(1, activation="sigmoid")  # probability real/fake
+    ])
+    return model
+
+# ==============================
+# 4. Build the GAN Model
+# ==============================
+noise_dim = 5
+generator = build_generator(noise_dim)
+discriminator = build_discriminator()
+
+# Compile Discriminator
+discriminator.compile(optimizer=optimizers.Adam(0.001), loss="binary_crossentropy", metrics=["accuracy"])
+
+# Freeze discriminator when training generator
+discriminator.trainable = False
+
+# GAN model: G + D
+z = layers.Input(shape=(noise_dim,))
+fake_sample = generator(z)
+validity = discriminator(fake_sample)
+gan = models.Model(z, validity)
+gan.compile(optimizer=optimizers.Adam(0.001), loss="binary_crossentropy")
+
+# ==============================
+# 5. Training Loop
+# ==============================
+def train(epochs=5000, batch_size=64, print_interval=500):
+    for epoch in range(epochs):
+        # --- Train Discriminator ---
+        real_samples = real_data_sampler(batch_size)
+        noise = noise_sampler(batch_size, noise_dim)
+        fake_samples = generator.predict(noise, verbose=0)
+
+        X = np.vstack((real_samples, fake_samples))
+        y = np.vstack((np.ones((batch_size, 1)), np.zeros((batch_size, 1))))
+
+        d_loss, d_acc = discriminator.train_on_batch(X, y)
+
+        # --- Train Generator ---
+        noise = noise_sampler(batch_size, noise_dim)
+        y_gen = np.ones((batch_size, 1))  # trick discriminator: want "real"
+        g_loss = gan.train_on_batch(noise, y_gen)
+
+        if epoch % print_interval == 0:
+            print(f"Epoch {epoch}: D_loss={d_loss:.4f}, D_acc={d_acc:.2f}, G_loss={g_loss:.4f}")
+
+train(epochs=5000, batch_size=64)
+```
+
+---
+
+### **4. What You’ll See**
+
+* At the beginning, generator outputs garbage.
+* As training proceeds, fake samples will approximate the Gaussian $N(4, 1.25)$.
+* Printouts of losses will show oscillations (normal in GANs).
+
+---
+
+### **5. Homework**
+
+👉 Try changing the **latent distribution** from `Uniform(-1,1)` to `Normal(0,1)`.
+
+* Does training converge faster/slower?
+* Does the generator learn a better Gaussian approximation?
+
+---
+
+Would you like me to also show you a **visualization snippet** (histograms of real vs generated samples during training) so you can *see* the GAN learning?
